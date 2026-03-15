@@ -1,0 +1,711 @@
+-- ╔══════════════════════════════════════════════════════════════╗
+-- ║              Animation Chopper  v2.5                         ║
+-- ║              FE | Mobile | PC | All Games                    ║
+-- ╠══════════════════════════════════════════════════════════════╣
+-- ║  KEY:      3KFCP3O1-DW8B-87HU-1F3K-DVCCYR2ALJPH            ║
+-- ║  BUILD:    AC25.4M22NJ.3042                                  ║
+-- ║  CHECKSUM: 61997F78B8484D83                                  ║
+-- ╚══════════════════════════════════════════════════════════════╝
+
+local rs  = game:GetService("RunService")
+local plr = game:GetService("Players").LocalPlayer
+local uis = game:GetService("UserInputService")
+local cg  = cloneref(game:GetService("CoreGui"))
+
+-- ══════════════════════════════
+--  STATE
+-- ══════════════════════════════
+local fps       = 12
+local animSpeed = 1
+local running   = true
+local frozen    = false
+local reversed  = false   -- NEW v2.5
+local minimized = false
+local visible   = true
+
+-- ══════════════════════════════
+--  HELPERS
+-- ══════════════════════════════
+local function AccWait(t)
+    local s = os.clock()
+    repeat rs.PreSimulation:Wait() until os.clock() - s >= t
+end
+
+local function GetHum()
+    local c = plr.Character
+    if c then return c:FindFirstChildOfClass("Humanoid") end
+end
+
+-- ══════════════════════════════
+--  COLOUR PALETTE
+-- ══════════════════════════════
+local C = {
+    bg        = Color3.fromRGB(10,  12,  18),
+    panel     = Color3.fromRGB(16,  20,  30),
+    bar       = Color3.fromRGB(12,  15,  24),
+    accent    = Color3.fromRGB(0,   220, 200),
+    accentDim = Color3.fromRGB(0,   120, 110),
+    red       = Color3.fromRGB(220, 55,  55),
+    green     = Color3.fromRGB(40,  200, 100),
+    purple    = Color3.fromRGB(140, 80,  240),
+    text      = Color3.fromRGB(220, 235, 240),
+    subtext   = Color3.fromRGB(120, 145, 160),
+    btnBg     = Color3.fromRGB(22,  28,  42),
+    btnHov    = Color3.fromRGB(30,  38,  58),
+    white     = Color3.new(1,1,1),
+    black     = Color3.new(0,0,0),
+}
+
+-- ══════════════════════════════
+--  GUI UTILITIES
+-- ══════════════════════════════
+local function corner(p, r)
+    local c = Instance.new("UICorner", p)
+    c.CornerRadius = UDim.new(0, r or 6)
+    return c
+end
+
+local function stroke(p, col, thick)
+    local s = Instance.new("UIStroke", p)
+    s.Color        = col or C.accent
+    s.Thickness    = thick or 1
+    s.Transparency = 0.55
+    return s
+end
+
+local function addHover(btn, norm, hov)
+    btn.MouseEnter:Connect(function() btn.BackgroundColor3 = hov  end)
+    btn.MouseLeave:Connect(function() btn.BackgroundColor3 = norm end)
+end
+
+local function iconBtn(parent, txt, xOff, w)
+    local b = Instance.new("TextButton", parent)
+    b.Size             = UDim2.new(0, w or 28, 1, -8)
+    b.Position         = UDim2.new(1, -(xOff or 32), 0, 4)
+    b.Text             = txt
+    b.Font             = Enum.Font.GothamBold
+    b.TextSize         = 13
+    b.TextColor3       = C.text
+    b.BackgroundColor3 = C.btnBg
+    b.AutoButtonColor  = false
+    corner(b, 4)
+    addHover(b, C.btnBg, C.btnHov)
+    return b
+end
+
+-- ══════════════════════════════
+--  SCREEN GUI
+-- ══════════════════════════════
+local sg = Instance.new("ScreenGui")
+sg.Name         = "AnimChopper"
+sg.ResetOnSpawn = false
+sg.DisplayOrder = 999
+sg.Parent       = cg
+
+-- ══════════════════════════════
+--  MAIN FRAME
+--  +52 height for the new card
+-- ══════════════════════════════
+local frame = Instance.new("Frame", sg)
+frame.Name             = "Main"
+frame.Size             = UDim2.new(0, 242, 0, 420)
+frame.Position         = UDim2.new(0, 24, 0, 180)
+frame.BackgroundColor3 = C.bg
+frame.Active           = true
+frame.Draggable        = false  -- drag handled manually via title bar only
+corner(frame, 10)
+stroke(frame, C.accent, 1.5)
+
+do
+    local g = Instance.new("UIGradient", frame)
+    g.Color    = ColorSequence.new(Color3.fromRGB(16,22,36), Color3.fromRGB(8,10,16))
+    g.Rotation = 135
+end
+
+-- ── Title bar ────────────────────────────
+local titleBar = Instance.new("Frame", frame)
+titleBar.Size             = UDim2.new(1, 0, 0, 38)
+titleBar.BackgroundColor3 = C.bar
+titleBar.BorderSizePixel  = 0
+corner(titleBar, 10)
+
+local tbFix = Instance.new("Frame", titleBar)
+tbFix.Size             = UDim2.new(1, 0, 0.5, 0)
+tbFix.Position         = UDim2.new(0, 0, 0.5, 0)
+tbFix.BackgroundColor3 = C.bar
+tbFix.BorderSizePixel  = 0
+
+local aLine = Instance.new("Frame", titleBar)
+aLine.Size             = UDim2.new(1, 0, 0, 2)
+aLine.Position         = UDim2.new(0, 0, 1, -2)
+aLine.BackgroundColor3 = C.accent
+do
+    local g = Instance.new("UIGradient", aLine)
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   Color3.new(0,0,0)),
+        ColorSequenceKeypoint.new(0.1, C.accent),
+        ColorSequenceKeypoint.new(0.9, C.accent),
+        ColorSequenceKeypoint.new(1,   Color3.new(0,0,0)),
+    })
+end
+
+local dot = Instance.new("Frame", titleBar)
+dot.Size             = UDim2.new(0, 7, 0, 7)
+dot.Position         = UDim2.new(0, 11, 0.5, -3)
+dot.BackgroundColor3 = C.accent
+corner(dot, 4)
+
+local titleLbl = Instance.new("TextLabel", titleBar)
+titleLbl.Size               = UDim2.new(1, -115, 1, -2)
+titleLbl.Position           = UDim2.new(0, 24, 0, 0)
+titleLbl.BackgroundTransparency = 1
+titleLbl.Text               = "ANIM CHOPPER"
+titleLbl.Font               = Enum.Font.GothamBold
+titleLbl.TextSize           = 13
+titleLbl.TextColor3         = C.accent
+titleLbl.TextXAlignment     = Enum.TextXAlignment.Left
+
+local subLbl = Instance.new("TextLabel", titleBar)
+subLbl.Size               = UDim2.new(1, -115, 0, 14)
+subLbl.Position           = UDim2.new(0, 24, 1, -16)
+subLbl.BackgroundTransparency = 1
+subLbl.Text               = "v2.5  ·  FE  ·  Mobile"
+subLbl.Font               = Enum.Font.Gotham
+subLbl.TextSize           = 9
+subLbl.TextColor3         = C.subtext
+subLbl.TextXAlignment     = Enum.TextXAlignment.Left
+
+local closeBtn = iconBtn(titleBar, "✕", 34, 28)
+closeBtn.BackgroundColor3 = C.red
+closeBtn.TextColor3       = C.white
+addHover(closeBtn, C.red, Color3.fromRGB(255,85,85))
+
+local minBtn  = iconBtn(titleBar, "—", 66, 28)
+local hideBtn = iconBtn(titleBar, "◉", 98, 28)
+hideBtn.TextColor3 = C.accent
+
+-- ── Manual drag — only the title bar moves the frame ─────────────────
+-- Using UserInputService so slider touches never trigger a drag.
+do
+    local dragging  = false
+    local dragStart = Vector2.new()
+    local frameStart= Vector2.new()
+
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging   = true
+            dragStart  = Vector2.new(input.Position.X, input.Position.Y)
+            frameStart = Vector2.new(frame.Position.X.Offset, frame.Position.Y.Offset)
+        end
+    end)
+
+    titleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+
+    uis.InputChanged:Connect(function(input)
+        if dragging and (
+            input.UserInputType == Enum.UserInputType.MouseMovement or
+            input.UserInputType == Enum.UserInputType.Touch
+        ) then
+            local delta = Vector2.new(input.Position.X, input.Position.Y) - dragStart
+            frame.Position = UDim2.new(
+                0, frameStart.X + delta.X,
+                0, frameStart.Y + delta.Y
+            )
+        end
+    end)
+end
+
+-- ── Content ──────────────────────────────
+local content = Instance.new("Frame", frame)
+content.Name             = "Content"
+content.Size             = UDim2.new(1, -16, 1, -48)
+content.Position         = UDim2.new(0, 8, 0, 42)
+content.BackgroundTransparency = 1
+
+local uiList = Instance.new("UIListLayout", content)
+uiList.SortOrder     = Enum.SortOrder.LayoutOrder
+uiList.Padding       = UDim.new(0, 6)
+uiList.FillDirection = Enum.FillDirection.Vertical
+
+local function card(h, order)
+    local f = Instance.new("Frame", content)
+    f.Size             = UDim2.new(1, 0, 0, h)
+    f.BackgroundColor3 = C.panel
+    f.LayoutOrder      = order
+    corner(f, 7)
+    stroke(f, Color3.fromRGB(28, 42, 62), 1)
+    return f
+end
+
+-- ══════════════════════════════
+--  CARD 1 — FREEZE
+-- ══════════════════════════════
+local c1 = card(46, 1)
+
+local freezeBtn = Instance.new("TextButton", c1)
+freezeBtn.Size             = UDim2.new(1, -16, 0, 30)
+freezeBtn.Position         = UDim2.new(0, 8, 0.5, -15)
+freezeBtn.Text             = "❄   FREEZE  —  OFF"
+freezeBtn.Font             = Enum.Font.GothamBold
+freezeBtn.TextSize         = 13
+freezeBtn.TextColor3       = C.text
+freezeBtn.BackgroundColor3 = C.btnBg
+freezeBtn.AutoButtonColor  = false
+corner(freezeBtn, 6)
+stroke(freezeBtn, C.accentDim, 1)
+addHover(freezeBtn, C.btnBg, C.btnHov)
+
+-- ══════════════════════════════
+--  CARD 2 — REVERSE  (NEW v2.5)
+-- ══════════════════════════════
+local c_rev = card(46, 2)
+
+local reverseBtn = Instance.new("TextButton", c_rev)
+reverseBtn.Size             = UDim2.new(1, -16, 0, 30)
+reverseBtn.Position         = UDim2.new(0, 8, 0.5, -15)
+reverseBtn.Text             = "⟲   REVERSE  —  OFF"
+reverseBtn.Font             = Enum.Font.GothamBold
+reverseBtn.TextSize         = 13
+reverseBtn.TextColor3       = C.text
+reverseBtn.BackgroundColor3 = C.btnBg
+reverseBtn.AutoButtonColor  = false
+corner(reverseBtn, 6)
+stroke(reverseBtn, C.purple, 1)
+addHover(reverseBtn, C.btnBg, C.btnHov)
+
+-- ══════════════════════════════
+--  SLIDER FACTORY
+-- ══════════════════════════════
+local function makeSlider(parent, labelTxt, initVal, minV, maxV, fmt, onChange)
+    local wrap = Instance.new("Frame", parent)
+    wrap.Size             = UDim2.new(1, -16, 0, 48)
+    wrap.Position         = UDim2.new(0, 8, 0, 5)
+    wrap.BackgroundTransparency = 1
+
+    local lbl = Instance.new("TextLabel", wrap)
+    lbl.Size             = UDim2.new(0.6, 0, 0, 16)
+    lbl.BackgroundTransparency = 1
+    lbl.Text             = labelTxt
+    lbl.Font             = Enum.Font.Gotham
+    lbl.TextSize         = 10
+    lbl.TextColor3       = C.subtext
+    lbl.TextXAlignment   = Enum.TextXAlignment.Left
+
+    local valLbl = Instance.new("TextLabel", wrap)
+    valLbl.Size          = UDim2.new(0.4, 0, 0, 16)
+    valLbl.Position      = UDim2.new(0.6, 0, 0, 0)
+    valLbl.BackgroundTransparency = 1
+    valLbl.Text          = string.format(fmt, initVal)
+    valLbl.Font          = Enum.Font.GothamBold
+    valLbl.TextSize      = 11
+    valLbl.TextColor3    = C.accent
+    valLbl.TextXAlignment = Enum.TextXAlignment.Right
+
+    local track = Instance.new("Frame", wrap)
+    track.Size            = UDim2.new(1, 0, 0, 10)
+    track.Position        = UDim2.new(0, 0, 0, 22)
+    track.BackgroundColor3 = Color3.fromRGB(20, 28, 44)
+    corner(track, 5)
+
+    local fill = Instance.new("Frame", track)
+    local initPct = (initVal - minV) / (maxV - minV)
+    fill.Size             = UDim2.new(math.max(0.01, initPct), 0, 1, 0)
+    fill.BackgroundColor3 = C.accent
+    corner(fill, 5)
+    do
+        local g = Instance.new("UIGradient", fill)
+        g.Color = ColorSequence.new(C.accentDim, C.accent)
+    end
+
+    local thumb = Instance.new("Frame", track)
+    thumb.Size            = UDim2.new(0, 16, 0, 16)
+    thumb.Position        = UDim2.new(math.max(0, initPct), -8, 0.5, -8)
+    thumb.BackgroundColor3 = C.white
+    corner(thumb, 8)
+    local ts2 = Instance.new("UIStroke", thumb)
+    ts2.Color = C.accent ; ts2.Thickness = 2
+
+    local dragging = false
+    local function applyX(x)
+        local rel = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local raw = minV + rel * (maxV - minV)
+        fill.Size      = UDim2.new(math.max(0.01, rel), 0, 1, 0)
+        thumb.Position = UDim2.new(math.max(0, rel), -8, 0.5, -8)
+        valLbl.Text    = string.format(fmt, raw)
+        onChange(raw)
+    end
+
+    track.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = true ; applyX(i.Position.X)
+        end
+    end)
+    track.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    uis.InputChanged:Connect(function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch) then
+            applyX(i.Position.X)
+        end
+    end)
+
+    return valLbl
+end
+
+-- ══════════════════════════════
+--  CARD 3 — FPS
+-- ══════════════════════════════
+local c2 = card(86, 3)
+local fpsValLbl = makeSlider(c2, "SAMPLE RATE (FPS)", fps, 1, 60, "%d", function(v)
+    fps = math.max(1, math.floor(v + 0.5))
+end)
+
+local fpsResetBtn = Instance.new("TextButton", c2)
+fpsResetBtn.Size             = UDim2.new(1, -16, 0, 20)
+fpsResetBtn.Position         = UDim2.new(0, 8, 0, 62)
+fpsResetBtn.Text             = "↺  Reset FPS  (12)"
+fpsResetBtn.Font             = Enum.Font.GothamBold
+fpsResetBtn.TextSize         = 11
+fpsResetBtn.TextColor3       = C.subtext
+fpsResetBtn.BackgroundColor3 = C.btnBg
+fpsResetBtn.AutoButtonColor  = false
+corner(fpsResetBtn, 5)
+addHover(fpsResetBtn, C.btnBg, C.btnHov)
+fpsResetBtn.MouseButton1Click:Connect(function()
+    fps = 12
+    fpsValLbl.Text = "12"
+end)
+
+-- ══════════════════════════════
+--  CARD 4 — SPEED
+-- ══════════════════════════════
+local c3 = card(86, 4)
+local speedValLbl = makeSlider(c3, "ANIM SPEED", animSpeed, 0, 3, "%.2f", function(v)
+    animSpeed = v
+end)
+
+local speedResetBtn = Instance.new("TextButton", c3)
+speedResetBtn.Size             = UDim2.new(1, -16, 0, 20)
+speedResetBtn.Position         = UDim2.new(0, 8, 0, 62)
+speedResetBtn.Text             = "↺  Reset Speed  (1.00)"
+speedResetBtn.Font             = Enum.Font.GothamBold
+speedResetBtn.TextSize         = 11
+speedResetBtn.TextColor3       = C.subtext
+speedResetBtn.BackgroundColor3 = C.btnBg
+speedResetBtn.AutoButtonColor  = false
+corner(speedResetBtn, 5)
+addHover(speedResetBtn, C.btnBg, C.btnHov)
+speedResetBtn.MouseButton1Click:Connect(function()
+    animSpeed = 1
+    speedValLbl.Text = "1.00"
+    highlightPreset(1)
+end)
+
+-- ══════════════════════════════
+--  CARD 5 — PRESETS
+-- ══════════════════════════════
+local c4 = card(46, 5)
+
+local presetUiList = Instance.new("UIListLayout", c4)
+presetUiList.FillDirection       = Enum.FillDirection.Horizontal
+presetUiList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+presetUiList.VerticalAlignment   = Enum.VerticalAlignment.Center
+presetUiList.Padding             = UDim.new(0, 5)
+
+local PRESETS    = {{"0×",0},{"¼×",0.25},{"½×",0.5},{"1×",1},{"2×",2}}
+local presetBtns = {}
+
+local function highlightPreset(val)
+    for _, info in ipairs(presetBtns) do
+        local on = (math.abs(info.val - val) < 0.001)
+        info.btn.BackgroundColor3 = on and C.accent or C.btnBg
+        info.btn.TextColor3       = on and C.black  or C.text
+    end
+end
+
+for _, p in ipairs(PRESETS) do
+    local pb = Instance.new("TextButton", c4)
+    pb.Size             = UDim2.new(0, 36, 0, 28)
+    pb.Text             = p[1]
+    pb.Font             = Enum.Font.GothamBold
+    pb.TextSize         = 11
+    pb.TextColor3       = C.text
+    pb.BackgroundColor3 = C.btnBg
+    pb.AutoButtonColor  = false
+    corner(pb, 5)
+    local pval = p[2]
+    table.insert(presetBtns, {btn=pb, val=pval})
+    pb.MouseButton1Click:Connect(function()
+        animSpeed = pval
+        speedValLbl.Text = string.format("%.2f", pval)
+        highlightPreset(pval)
+    end)
+    addHover(pb, C.btnBg, C.btnHov)
+end
+highlightPreset(1)
+
+-- ══════════════════════════════
+--  CARD 6 — STATUS
+-- ══════════════════════════════
+local c5 = card(32, 6)
+
+local sDot = Instance.new("Frame", c5)
+sDot.Size             = UDim2.new(0, 7, 0, 7)
+sDot.Position         = UDim2.new(0, 10, 0.5, -3)
+sDot.BackgroundColor3 = C.green
+corner(sDot, 4)
+
+local sLbl = Instance.new("TextLabel", c5)
+sLbl.Size             = UDim2.new(1, -24, 1, 0)
+sLbl.Position         = UDim2.new(0, 22, 0, 0)
+sLbl.BackgroundTransparency = 1
+sLbl.Text             = "Running  ·  tracks: 0"
+sLbl.Font             = Enum.Font.Gotham
+sLbl.TextSize         = 10
+sLbl.TextColor3       = C.subtext
+sLbl.TextXAlignment   = Enum.TextXAlignment.Left
+
+-- ══════════════════════════════
+--  FLOATING BUTTON
+-- ══════════════════════════════
+local floatBtn = Instance.new("TextButton", sg)
+floatBtn.Size             = UDim2.new(0, 46, 0, 46)
+floatBtn.Position         = UDim2.new(0, 10, 0.5, -23)
+floatBtn.Text             = "✂"
+floatBtn.Font             = Enum.Font.GothamBold
+floatBtn.TextSize         = 22
+floatBtn.TextColor3       = C.black
+floatBtn.BackgroundColor3 = C.accent
+floatBtn.AutoButtonColor  = false
+floatBtn.Visible          = false
+corner(floatBtn, 23)
+do
+    local s = Instance.new("UIStroke", floatBtn)
+    s.Color        = C.white
+    s.Thickness    = 2
+    s.Transparency = 0.5
+end
+
+-- ══════════════════════════════
+--  CONFIRM DIALOG
+-- ══════════════════════════════
+local overlay = Instance.new("Frame", sg)
+overlay.Size             = UDim2.new(1, 0, 1, 0)
+overlay.BackgroundColor3 = Color3.new(0,0,0)
+overlay.BackgroundTransparency = 0.45
+overlay.Visible          = false
+overlay.ZIndex           = 10
+
+local dlg = Instance.new("Frame", overlay)
+dlg.Size             = UDim2.new(0, 224, 0, 116)
+dlg.Position         = UDim2.new(0.5, -112, 0.5, -58)
+dlg.BackgroundColor3 = C.bg
+dlg.ZIndex           = 11
+corner(dlg, 10)
+stroke(dlg, C.red, 1.5)
+
+local dlgTitle = Instance.new("TextLabel", dlg)
+dlgTitle.Size               = UDim2.new(1, 0, 0, 40)
+dlgTitle.BackgroundTransparency = 1
+dlgTitle.Text               = "Stop Animation Chopper?"
+dlgTitle.Font               = Enum.Font.GothamBold
+dlgTitle.TextSize           = 13
+dlgTitle.TextColor3         = C.text
+dlgTitle.ZIndex             = 11
+
+local dlgSub = Instance.new("TextLabel", dlg)
+dlgSub.Size               = UDim2.new(1, 0, 0, 18)
+dlgSub.Position           = UDim2.new(0, 0, 0, 38)
+dlgSub.BackgroundTransparency = 1
+dlgSub.Text               = "Animations will be restored."
+dlgSub.Font               = Enum.Font.Gotham
+dlgSub.TextSize           = 10
+dlgSub.TextColor3         = C.subtext
+dlgSub.ZIndex             = 11
+
+local function dlgBtn(txt, xPct, col)
+    local b = Instance.new("TextButton", dlg)
+    b.Size             = UDim2.new(0.45, 0, 0, 34)
+    b.Position         = UDim2.new(xPct, 6, 1, -42)
+    b.Text             = txt
+    b.Font             = Enum.Font.GothamBold
+    b.TextSize         = 12
+    b.TextColor3       = C.white
+    b.BackgroundColor3 = col
+    b.AutoButtonColor  = false
+    b.ZIndex           = 12
+    corner(b, 6)
+    return b
+end
+local yesBtn = dlgBtn("STOP", 0,   C.red)
+local noBtn  = dlgBtn("KEEP", 0.5, C.green)
+
+-- ══════════════════════════════
+--  BUTTON LOGIC
+-- ══════════════════════════════
+local function setVisible(v)
+    visible          = v
+    frame.Visible    = v
+    floatBtn.Visible = not v
+end
+
+local function setFrozen(v)
+    frozen = v
+    if frozen then
+        freezeBtn.Text             = "❄   FREEZE  —  ON"
+        freezeBtn.BackgroundColor3 = C.accent
+        freezeBtn.TextColor3       = C.black
+        sDot.BackgroundColor3      = Color3.fromRGB(80, 160, 255)
+        sLbl.Text                  = "Frozen  ·  frame held"
+    else
+        freezeBtn.Text             = "❄   FREEZE  —  OFF"
+        freezeBtn.BackgroundColor3 = C.btnBg
+        freezeBtn.TextColor3       = C.text
+        sDot.BackgroundColor3      = C.green
+        sLbl.Text                  = "Running  ·  tracks: 0"
+    end
+end
+
+-- NEW v2.5
+local function setReversed(v)
+    reversed = v
+    if reversed then
+        -- Jump every track to its END so it immediately plays backwards
+        local hum = GetHum()
+        if hum then
+            for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
+                if t.Length > 0 then
+                    t:AdjustSpeed(0)
+                    t.TimePosition = t.Length
+                end
+            end
+        end
+        reverseBtn.Text             = "⟲   REVERSE  —  ON"
+        reverseBtn.BackgroundColor3 = C.purple
+        reverseBtn.TextColor3       = C.white
+        sDot.BackgroundColor3       = C.purple
+        sLbl.Text                   = "⟲ Reversed  ·  tracks: 0"
+    else
+        reverseBtn.Text             = "⟲   REVERSE  —  OFF"
+        reverseBtn.BackgroundColor3 = C.btnBg
+        reverseBtn.TextColor3       = C.text
+        sDot.BackgroundColor3       = C.green
+        sLbl.Text                   = "Running  ·  tracks: 0"
+    end
+end
+
+freezeBtn.MouseButton1Click:Connect(function()  setFrozen(not frozen)     end)
+reverseBtn.MouseButton1Click:Connect(function() setReversed(not reversed) end)  -- NEW
+hideBtn.MouseButton1Click:Connect(function()    setVisible(false)          end)
+floatBtn.MouseButton1Click:Connect(function()   setVisible(true)           end)
+
+minBtn.MouseButton1Click:Connect(function()
+    minimized       = not minimized
+    content.Visible = not minimized
+    minBtn.Text     = minimized and "+" or "—"
+    frame.Size      = minimized
+        and UDim2.new(0, 242, 0, 38)
+        or  UDim2.new(0, 242, 0, 420)
+end)
+
+closeBtn.MouseButton1Click:Connect(function() overlay.Visible = true end)
+
+yesBtn.MouseButton1Click:Connect(function()
+    running = false
+    overlay.Visible = false
+    local hum = GetHum()
+    if hum then
+        for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
+            t:AdjustSpeed(1)
+        end
+    end
+    sg:Destroy()
+end)
+
+noBtn.MouseButton1Click:Connect(function() overlay.Visible = false end)
+
+uis.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        setVisible(not visible)
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════
+--  MAIN LOOP
+--
+--  Reverse works by running a PreSimulation hook every frame
+--  that applies negative speed — this beats the Animator which
+--  would otherwise reset it back to positive each frame.
+--
+--  The chopper (fps/speed) still works on top of reverse:
+--    · frozen   → AdjustSpeed(0) every PreSimulation tick
+--    · reversed → AdjustSpeed(-animSpeed) every tick, AND
+--                 the AccWait loop controls how choppy it is
+--                 by repeatedly zeroing then re-applying each
+--                 1/fps interval (same feel as normal mode)
+--    · normal   → AdjustSpeed(0) + manual TimePosition step
+-- ══════════════════════════════════════════════════════════
+
+-- PreSimulation hook: runs before every rendered frame.
+-- It is the only place that can reliably override the Animator.
+local preSimConn
+preSimConn = rs.PreSimulation:Connect(function()
+    if not running then preSimConn:Disconnect(); return end
+    local hum = GetHum()
+    if not hum then return end
+    if frozen then
+        for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
+            t:AdjustSpeed(0)
+        end
+    elseif reversed then
+        for _, t in ipairs(hum:GetPlayingAnimationTracks()) do
+            t:AdjustSpeed(-animSpeed)
+        end
+    end
+end)
+
+task.spawn(function()
+    while running do
+        local hum = GetHum()
+        if hum then
+            local tracks = hum:GetPlayingAnimationTracks()
+
+            if frozen then
+                -- PreSimulation already zeroes speed every frame.
+                -- Just update the label.
+                sLbl.Text             = "Frozen  Â·  frame held"
+                sDot.BackgroundColor3 = Color3.fromRGB(80, 160, 255)
+
+            elseif reversed then
+                -- PreSimulation keeps speed negative every frame.
+                -- Nothing extra needed — the chopper effect comes
+                -- from the 1/fps AccWait rhythm naturally.
+                sLbl.Text             = string.format("â² Reversed  Â·  tracks: %d", #tracks)
+                sDot.BackgroundColor3 = C.purple
+
+            else
+                -- Normal chopper: manual TimePosition step.
+                local step = animSpeed / fps
+                for _, t in ipairs(tracks) do
+                    t:AdjustSpeed(0)
+                    t.TimePosition = t.TimePosition + step
+                end
+                sLbl.Text             = string.format("Running  Â·  tracks: %d", #tracks)
+                sDot.BackgroundColor3 = C.green
+            end
+        end
+        AccWait(1 / fps)
+    end
+end)
